@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createAppContainer } from '../../src/app/container.js';
 import { createHttpServer } from '../../src/infra/http/server.js';
 import type { AppConfig } from '../../src/infra/config/schema.js';
 
-function cfg(db: string): AppConfig {
+function cfg(db: string, rustEnabled = false): AppConfig {
   return {
     NODE_ENV: 'test',
     HOST: '127.0.0.1',
@@ -21,7 +21,7 @@ function cfg(db: string): AppConfig {
     GEN_TIMEOUT_MS: 30000,
     GEN_MAX_TOKENS: 512,
     GEN_TEMPERATURE: 0.4,
-    RUST_CHAIN_ENABLED: false,
+    RUST_CHAIN_ENABLED: rustEnabled,
     RUST_CHAIN_BRIDGE_PATH: './crates/memphis-napi',
     DATABASE_URL: `file:${db}`,
   };
@@ -77,6 +77,55 @@ describe('vault routes e2e', () => {
 
     expect(decrypt.statusCode).toBe(503);
 
+    await app.close();
+  });
+
+  it('persists encrypted entries when rust bridge is available', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'mv4-vault-persist-'));
+    const conf = cfg(join(dir, 'vault.db'), true);
+
+    const bridgePath = join(dir, 'mock-rust-bridge.cjs');
+    writeFileSync(
+      bridgePath,
+      `module.exports = {
+  vault_init: (requestJson) => JSON.stringify({ ok: true, data: { version: 1, did: 'did:memphis:mock' } }),
+  vault_encrypt: (key, plaintext) => JSON.stringify({ ok: true, data: { key, encrypted: 'plain:' + plaintext, iv: 'mock-iv' } }),
+  vault_decrypt: (entryJson) => {
+    const entry = JSON.parse(entryJson);
+    return JSON.stringify({ ok: true, data: { plaintext: String(entry.encrypted || '').replace(/^plain:/, '') } });
+  }
+};`,
+      'utf8',
+    );
+
+    process.env.RUST_CHAIN_ENABLED = 'true';
+    process.env.RUST_CHAIN_BRIDGE_PATH = bridgePath;
+    process.env.MEMPHIS_VAULT_ENTRIES_PATH = join(dir, 'vault-entries.json');
+
+    const c = createAppContainer(conf);
+    const app = createHttpServer(conf, c.orchestration, {
+      sessionRepository: c.sessionRepository,
+      generationEventRepository: c.generationEventRepository,
+    });
+
+    const encrypt = await app.inject({
+      method: 'POST',
+      url: '/v1/vault/encrypt',
+      payload: { key: 'openai_api_key', plaintext: 'secret' },
+    });
+
+    expect(encrypt.statusCode).toBe(200);
+
+    const list = await app.inject({ method: 'GET', url: '/v1/vault/entries' });
+    expect(list.statusCode).toBe(200);
+    const body = list.json() as { count: number; entries: Array<{ key: string; createdAt: string }> };
+    expect(body.count).toBe(1);
+    expect(body.entries[0]?.key).toBe('openai_api_key');
+    expect(typeof body.entries[0]?.createdAt).toBe('string');
+
+    delete process.env.RUST_CHAIN_ENABLED;
+    delete process.env.RUST_CHAIN_BRIDGE_PATH;
+    delete process.env.MEMPHIS_VAULT_ENTRIES_PATH;
     await app.close();
   });
 });

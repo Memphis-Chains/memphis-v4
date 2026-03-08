@@ -15,6 +15,7 @@ export const apiAuthPolicy: EndpointAuthPolicy[] = [
   { method: 'POST', path: '/v1/vault/init', requiresAuth: true },
   { method: 'POST', path: '/v1/vault/encrypt', requiresAuth: true },
   { method: 'POST', path: '/v1/vault/decrypt', requiresAuth: true },
+  { method: 'GET', path: '/v1/vault/entries', requiresAuth: true },
 ];
 
 export function isAuthRequired(method: string, path: string): boolean {

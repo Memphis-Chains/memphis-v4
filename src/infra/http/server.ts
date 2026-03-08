@@ -18,6 +18,7 @@ import {
   type VaultEntry,
   type VaultInitInput,
 } from '../storage/rust-vault-adapter.js';
+import { listVaultEntries, saveVaultEntry } from '../storage/vault-entry-store.js';
 import type { OrchestrationService } from '../../modules/orchestration/service.js';
 import { registerChatRoutes } from './routes/chat.js';
 import type {
@@ -61,7 +62,8 @@ export function createHttpServer(
       routePath.startsWith('/v1/sessions/') ||
       routePath === '/v1/vault/init' ||
       routePath === '/v1/vault/encrypt' ||
-      routePath === '/v1/vault/decrypt'
+      routePath === '/v1/vault/decrypt' ||
+      routePath === '/v1/vault/entries'
     ) {
       sensitiveLimiter.check(key);
     }
@@ -171,7 +173,8 @@ export function createHttpServer(
     try {
       const { key, plaintext } = parsed.data;
       const out = vaultEncrypt(key, plaintext, process.env);
-      return { ok: true, entry: out };
+      const saved = saveVaultEntry(out, process.env);
+      return { ok: true, entry: saved };
     } catch (error) {
       return reply.status(503).send({
         ok: false,
@@ -197,6 +200,11 @@ export function createHttpServer(
         error: error instanceof Error ? error.message : 'vault_decrypt_failed',
       });
     }
+  });
+
+  app.get<{ Querystring: { key?: string } }>('/v1/vault/entries', async (request) => {
+    const entries = listVaultEntries(process.env, request.query?.key);
+    return { ok: true, count: entries.length, entries };
   });
 
   app.get('/v1/sessions', async () => {
