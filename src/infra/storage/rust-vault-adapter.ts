@@ -31,6 +31,10 @@ interface BridgeEnvelope<T> {
   error?: string;
 }
 
+function getVaultPepper(rawEnv: NodeJS.ProcessEnv): string {
+  return (rawEnv.MEMPHIS_VAULT_PEPPER ?? '').trim();
+}
+
 function parseBool(v: string | undefined, fallback = false): boolean {
   if (typeof v !== 'string') return fallback;
   return v.toLowerCase() === 'true';
@@ -92,6 +96,11 @@ function getBridgeOrThrow(rawEnv: NodeJS.ProcessEnv = process.env): RustBridgeLi
   }
   if (!status.bridgeLoaded || !status.vaultApiAvailable) {
     throw new Error('rust vault bridge unavailable');
+  }
+
+  const pepper = getVaultPepper(rawEnv);
+  if (pepper.length < 12) {
+    throw new Error('MEMPHIS_VAULT_PEPPER missing or too short (min 12 chars)');
   }
 
   const bridge = loadBridge(status.rustBridgePath);

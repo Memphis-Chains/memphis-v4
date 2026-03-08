@@ -100,6 +100,7 @@ describe('vault routes e2e', () => {
 
     process.env.RUST_CHAIN_ENABLED = 'true';
     process.env.RUST_CHAIN_BRIDGE_PATH = bridgePath;
+    process.env.MEMPHIS_VAULT_PEPPER = 'phase1pepper-secret';
     process.env.MEMPHIS_VAULT_ENTRIES_PATH = join(dir, 'vault-entries.json');
 
     const c = createAppContainer(conf);
@@ -125,6 +126,7 @@ describe('vault routes e2e', () => {
 
     delete process.env.RUST_CHAIN_ENABLED;
     delete process.env.RUST_CHAIN_BRIDGE_PATH;
+    delete process.env.MEMPHIS_VAULT_PEPPER;
     delete process.env.MEMPHIS_VAULT_ENTRIES_PATH;
     await app.close();
   });
