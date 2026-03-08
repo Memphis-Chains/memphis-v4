@@ -99,6 +99,16 @@ Responses:
 ```
 - `401` unauthorized
 
+## Cipher format + migration policy
+- Current encrypted payload format is versioned:
+  - `mv1:<base64-ciphertext>`
+- Decrypt path is migration-safe and accepts:
+  1. `mv1:<...>` (current format)
+  2. `<base64-ciphertext>` (legacy no-prefix format)
+  3. `plain:<plaintext>` (legacy scaffold fallback)
+
+This allows progressive migration without breaking older stored entries.
+
 ## Notes
 - Current persistence scaffold stores entries in JSON file (`MEMPHIS_VAULT_ENTRIES_PATH` or `./data/vault-entries.json`).
 - Crypto in Rust vault uses Argon2id + AES-256-GCM in current implementation.
