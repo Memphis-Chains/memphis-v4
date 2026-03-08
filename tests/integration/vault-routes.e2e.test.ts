@@ -119,10 +119,15 @@ describe('vault routes e2e', () => {
 
     const list = await app.inject({ method: 'GET', url: '/v1/vault/entries' });
     expect(list.statusCode).toBe(200);
-    const body = list.json() as { count: number; entries: Array<{ key: string; createdAt: string }> };
+    const body = list.json() as {
+      count: number;
+      entries: Array<{ key: string; createdAt: string; fingerprint: string; integrityOk: boolean }>;
+    };
     expect(body.count).toBe(1);
     expect(body.entries[0]?.key).toBe('openai_api_key');
     expect(typeof body.entries[0]?.createdAt).toBe('string');
+    expect(typeof body.entries[0]?.fingerprint).toBe('string');
+    expect(body.entries[0]?.integrityOk).toBe(true);
 
     delete process.env.RUST_CHAIN_ENABLED;
     delete process.env.RUST_CHAIN_BRIDGE_PATH;

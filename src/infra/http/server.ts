@@ -18,7 +18,7 @@ import {
   type VaultEntry,
   type VaultInitInput,
 } from '../storage/rust-vault-adapter.js';
-import { listVaultEntries, saveVaultEntry } from '../storage/vault-entry-store.js';
+import { listVaultEntries, saveVaultEntry, verifyVaultEntry } from '../storage/vault-entry-store.js';
 import type { OrchestrationService } from '../../modules/orchestration/service.js';
 import { registerChatRoutes } from './routes/chat.js';
 import type {
@@ -204,7 +204,11 @@ export function createHttpServer(
 
   app.get<{ Querystring: { key?: string } }>('/v1/vault/entries', async (request) => {
     const entries = listVaultEntries(process.env, request.query?.key);
-    return { ok: true, count: entries.length, entries };
+    const withIntegrity = entries.map((entry) => ({
+      ...entry,
+      integrityOk: verifyVaultEntry(entry),
+    }));
+    return { ok: true, count: withIntegrity.length, entries: withIntegrity };
   });
 
   app.get('/v1/sessions', async () => {
