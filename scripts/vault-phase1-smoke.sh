@@ -37,4 +37,11 @@ PASS "npm run typecheck"
 npm test >/tmp/mv4-vault-test.out 2>&1 || { cat /tmp/mv4-vault-test.out; FAIL "npm test"; }
 PASS "npm test"
 
+npm run build >/tmp/mv4-vault-build.out 2>&1 || { cat /tmp/mv4-vault-build.out; FAIL "npm run build"; }
+PASS "npm run build"
+
+if [ -z "${MEMPHIS_VAULT_PEPPER:-}" ]; then
+  echo "[WARN] MEMPHIS_VAULT_PEPPER is not set (vault runtime calls will be blocked by policy)"
+fi
+
 echo "SMOKE_VAULT_PHASE1_OK"
