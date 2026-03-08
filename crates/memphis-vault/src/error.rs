@@ -2,6 +2,12 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum VaultError {
-    #[error("not implemented: {0}")]
-    NotImplemented(&'static str),
+    #[error("invalid input: {0}")]
+    InvalidInput(&'static str),
+
+    #[error("crypto operation failed")]
+    CryptoFailure,
+
+    #[error("encoding/decoding failed")]
+    EncodingFailure,
 }
