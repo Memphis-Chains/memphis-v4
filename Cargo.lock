@@ -331,6 +331,7 @@ name = "memphis-napi"
 version = "0.1.0"
 dependencies = [
  "memphis-core",
+ "memphis-vault",
  "napi",
  "napi-derive",
  "serde",
