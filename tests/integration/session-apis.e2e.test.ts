@@ -14,6 +14,8 @@ function cfg(db: string): AppConfig {
     DECENTRALIZED_LLM_API_BASE: undefined, DECENTRALIZED_LLM_API_KEY: undefined,
     LOCAL_FALLBACK_ENABLED: true,
     GEN_TIMEOUT_MS: 30000, GEN_MAX_TOKENS: 512, GEN_TEMPERATURE: 0.4,
+    RUST_CHAIN_ENABLED: false,
+    RUST_CHAIN_BRIDGE_PATH: "./crates/memphis-napi",
     DATABASE_URL: `file:${db}`,
   };
 }

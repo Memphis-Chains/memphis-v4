@@ -17,6 +17,8 @@ function base(): AppConfig {
     GEN_TIMEOUT_MS: 30000,
     GEN_MAX_TOKENS: 4096,
     GEN_TEMPERATURE: 0.4,
+    RUST_CHAIN_ENABLED: false,
+    RUST_CHAIN_BRIDGE_PATH: "./crates/memphis-napi",
     DATABASE_URL: 'file:./data/test.db',
   };
 }

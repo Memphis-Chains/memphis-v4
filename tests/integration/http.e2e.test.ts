@@ -22,6 +22,8 @@ function makeConfig(): AppConfig {
     GEN_TIMEOUT_MS: 30000,
     GEN_MAX_TOKENS: 512,
     GEN_TEMPERATURE: 0.4,
+    RUST_CHAIN_ENABLED: false,
+    RUST_CHAIN_BRIDGE_PATH: "./crates/memphis-napi",
     DATABASE_URL: `file:${join(dir, 'e2e.db')}`,
   };
 }
