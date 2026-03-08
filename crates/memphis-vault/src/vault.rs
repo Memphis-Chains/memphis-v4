@@ -10,6 +10,7 @@ use crate::error::VaultError;
 use crate::types::{VaultEntry, VaultInitRequest, VaultInitResult};
 
 const ENCRYPTION_DOMAIN_SALT: &[u8] = b"memphis-vault-phase1-domain-salt";
+const CIPHER_FORMAT_V1: &str = "mv1";
 
 pub fn derive_master_key(passphrase: &str, salt: &[u8]) -> Result<[u8; 32], VaultError> {
     if passphrase.trim().is_empty() {
@@ -48,6 +49,9 @@ pub fn encrypt_entry(key: &str, plaintext: &str) -> Result<VaultEntry, VaultErro
         return Err(VaultError::InvalidInput("encrypt_entry: empty key"));
     }
 
+    // Phase 1.5 hardening:
+    // - key is treated as key alias/identifier
+    // - cipher payload explicitly versioned for migration-safe decoding
     let enc_key = derive_master_key(key, ENCRYPTION_DOMAIN_SALT)?;
     let cipher = Aes256Gcm::new_from_slice(&enc_key).map_err(|_| VaultError::CryptoFailure)?;
 
@@ -61,12 +65,20 @@ pub fn encrypt_entry(key: &str, plaintext: &str) -> Result<VaultEntry, VaultErro
 
     Ok(VaultEntry {
         key: key.to_string(),
-        encrypted: B64.encode(ciphertext),
+        encrypted: format!("{CIPHER_FORMAT_V1}:{}", B64.encode(ciphertext)),
         iv: B64.encode(iv),
     })
 }
 
 pub fn decrypt_entry(entry: &VaultEntry) -> Result<String, VaultError> {
+    // Backward-compatible decode path:
+    // - new format: "mv1:<base64-ciphertext>"
+    // - legacy format: "<base64-ciphertext>"
+    // - legacy scaffold format: "plain:<plaintext>"
+    if let Some(rest) = entry.encrypted.strip_prefix("plain:") {
+        return Ok(rest.to_string());
+    }
+
     let enc_key = derive_master_key(&entry.key, ENCRYPTION_DOMAIN_SALT)?;
     let cipher = Aes256Gcm::new_from_slice(&enc_key).map_err(|_| VaultError::CryptoFailure)?;
 
@@ -76,9 +88,14 @@ pub fn decrypt_entry(entry: &VaultEntry) -> Result<String, VaultError> {
     }
     let nonce = Nonce::from_slice(&iv);
 
-    let ciphertext = B64
-        .decode(&entry.encrypted)
-        .map_err(|_| VaultError::EncodingFailure)?;
+    let payload = if let Some(v1) = entry.encrypted.strip_prefix(&format!("{CIPHER_FORMAT_V1}:")) {
+        v1
+    } else {
+        // migration fallback for pre-v1 formatted ciphertext
+        entry.encrypted.as_str()
+    };
+
+    let ciphertext = B64.decode(payload).map_err(|_| VaultError::EncodingFailure)?;
 
     let plaintext = cipher
         .decrypt(nonce, ciphertext.as_ref())
@@ -132,5 +149,22 @@ mod tests {
         let mut entry = encrypt_entry("openai_api_key", "secret-value").expect("encrypt");
         entry.encrypted = "@@not-base64@@".to_string();
         assert!(decrypt_entry(&entry).is_err());
+    }
+
+    #[test]
+    fn decrypt_accepts_legacy_plain_prefix() {
+        let entry = VaultEntry {
+            key: "openai_api_key".to_string(),
+            encrypted: "plain:legacy-secret".to_string(),
+            iv: "ignored".to_string(),
+        };
+        let plain = decrypt_entry(&entry).expect("legacy plain decrypt");
+        assert_eq!(plain, "legacy-secret");
+    }
+
+    #[test]
+    fn encrypt_sets_versioned_ciphertext_prefix() {
+        let entry = encrypt_entry("openai_api_key", "secret-value").expect("encrypt");
+        assert!(entry.encrypted.starts_with("mv1:"));
     }
 }
