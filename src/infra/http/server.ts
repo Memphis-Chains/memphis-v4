@@ -8,7 +8,14 @@ import { sensitiveLimiter } from './rate-limit.js';
 import { computeHealthSummary } from '../ops/health-summary.js';
 import { handleHttpError } from './error-handler.js';
 import { getChainAdapterStatus } from '../storage/chain-adapter.js';
-import { getRustVaultAdapterStatus } from '../storage/rust-vault-adapter.js';
+import {
+  getRustVaultAdapterStatus,
+  vaultDecrypt,
+  vaultEncrypt,
+  vaultInit,
+  type VaultEntry,
+  type VaultInitInput,
+} from '../storage/rust-vault-adapter.js';
 import type { OrchestrationService } from '../../modules/orchestration/service.js';
 import { registerChatRoutes } from './routes/chat.js';
 import type {
@@ -128,6 +135,43 @@ export function createHttpServer(
   });
 
 
+
+  app.post<{ Body: VaultInitInput }>('/v1/vault/init', async (request, reply) => {
+    try {
+      const out = vaultInit(request.body, process.env);
+      return { ok: true, vault: out };
+    } catch (error) {
+      return reply.status(503).send({
+        ok: false,
+        error: error instanceof Error ? error.message : 'vault_init_failed',
+      });
+    }
+  });
+
+  app.post<{ Body: { key: string; plaintext: string } }>('/v1/vault/encrypt', async (request, reply) => {
+    try {
+      const { key, plaintext } = request.body;
+      const out = vaultEncrypt(key, plaintext, process.env);
+      return { ok: true, entry: out };
+    } catch (error) {
+      return reply.status(503).send({
+        ok: false,
+        error: error instanceof Error ? error.message : 'vault_encrypt_failed',
+      });
+    }
+  });
+
+  app.post<{ Body: { entry: VaultEntry } }>('/v1/vault/decrypt', async (request, reply) => {
+    try {
+      const out = vaultDecrypt(request.body.entry, process.env);
+      return { ok: true, plaintext: out };
+    } catch (error) {
+      return reply.status(503).send({
+        ok: false,
+        error: error instanceof Error ? error.message : 'vault_decrypt_failed',
+      });
+    }
+  });
 
   app.get('/v1/sessions', async () => {
     if (!repos) return { sessions: [] };
