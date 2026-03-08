@@ -7,6 +7,8 @@ import { isAuthRequired } from './auth-policy.js';
 import { sensitiveLimiter } from './rate-limit.js';
 import { computeHealthSummary } from '../ops/health-summary.js';
 import { handleHttpError } from './error-handler.js';
+import { getChainAdapterStatus } from '../storage/chain-adapter.js';
+import { getRustVaultAdapterStatus } from '../storage/rust-vault-adapter.js';
 import type { OrchestrationService } from '../../modules/orchestration/service.js';
 import { registerChatRoutes } from './routes/chat.js';
 import type {
@@ -106,6 +108,9 @@ export function createHttpServer(
     const uptimeSec = Math.floor(process.uptime());
     const metricsSnapshot = metrics.snapshot();
     const health = computeHealthSummary({ providers, uptimeSec });
+    const chainAdapter = getChainAdapterStatus(process.env);
+    const vaultAdapter = getRustVaultAdapterStatus(process.env);
+
     return {
       service: 'memphis-v4',
       version: '0.1.0',
@@ -114,6 +119,10 @@ export function createHttpServer(
       providers,
       metrics: metricsSnapshot,
       health,
+      adapters: {
+        chain: chainAdapter,
+        vault: vaultAdapter,
+      },
       timestamp: new Date().toISOString(),
     };
   });

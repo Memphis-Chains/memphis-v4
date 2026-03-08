@@ -1,3 +1,5 @@
+import { createRequire } from 'node:module';
+
 export interface RustVaultAdapterStatus {
   rustEnabled: boolean;
   rustBridgePath: string;
@@ -22,8 +24,8 @@ function getBridgePath(rawEnv: NodeJS.ProcessEnv): string {
 
 function loadBridge(path: string): RustBridgeLike | null {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    return require(path) as RustBridgeLike;
+    const req = createRequire(`${process.cwd()}/`);
+    return req(path) as RustBridgeLike;
   } catch {
     return null;
   }
