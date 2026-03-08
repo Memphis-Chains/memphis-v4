@@ -1,4 +1,4 @@
-use aes_gcm::aead::{Aead, KeyInit};
+use aes_gcm::aead::{Aead, KeyInit, Payload};
 use aes_gcm::{Aes256Gcm, Nonce};
 use argon2::Argon2;
 use base64::engine::general_purpose::STANDARD as B64;
@@ -45,14 +45,13 @@ pub fn init_vault(req: VaultInitRequest) -> Result<VaultInitResult, VaultError> 
 }
 
 pub fn encrypt_entry(key: &str, plaintext: &str) -> Result<VaultEntry, VaultError> {
-    if key.trim().is_empty() {
-        return Err(VaultError::InvalidInput("encrypt_entry: empty key"));
-    }
+    let key_alias = normalize_key_alias(key)?;
 
-    // Phase 1.5 hardening:
-    // - key is treated as key alias/identifier
-    // - cipher payload explicitly versioned for migration-safe decoding
-    let enc_key = derive_master_key(key, ENCRYPTION_DOMAIN_SALT)?;
+    // Phase 1.5/1.6 hardening:
+    // - key is treated as normalized key alias/identifier
+    // - ciphertext format explicitly versioned
+    // - AES-GCM AAD binds ciphertext to key alias
+    let enc_key = derive_master_key(&key_alias, ENCRYPTION_DOMAIN_SALT)?;
     let cipher = Aes256Gcm::new_from_slice(&enc_key).map_err(|_| VaultError::CryptoFailure)?;
 
     let mut iv = [0u8; 12];
@@ -60,11 +59,17 @@ pub fn encrypt_entry(key: &str, plaintext: &str) -> Result<VaultEntry, VaultErro
     let nonce = Nonce::from_slice(&iv);
 
     let ciphertext = cipher
-        .encrypt(nonce, plaintext.as_bytes())
+        .encrypt(
+            nonce,
+            Payload {
+                msg: plaintext.as_bytes(),
+                aad: key_alias.as_bytes(),
+            },
+        )
         .map_err(|_| VaultError::CryptoFailure)?;
 
     Ok(VaultEntry {
-        key: key.to_string(),
+        key: key_alias,
         encrypted: format!("{CIPHER_FORMAT_V1}:{}", B64.encode(ciphertext)),
         iv: B64.encode(iv),
     })
@@ -79,7 +84,8 @@ pub fn decrypt_entry(entry: &VaultEntry) -> Result<String, VaultError> {
         return Ok(rest.to_string());
     }
 
-    let enc_key = derive_master_key(&entry.key, ENCRYPTION_DOMAIN_SALT)?;
+    let key_alias = normalize_key_alias(&entry.key)?;
+    let enc_key = derive_master_key(&key_alias, ENCRYPTION_DOMAIN_SALT)?;
     let cipher = Aes256Gcm::new_from_slice(&enc_key).map_err(|_| VaultError::CryptoFailure)?;
 
     let iv = B64.decode(&entry.iv).map_err(|_| VaultError::EncodingFailure)?;
@@ -97,11 +103,28 @@ pub fn decrypt_entry(entry: &VaultEntry) -> Result<String, VaultError> {
 
     let ciphertext = B64.decode(payload).map_err(|_| VaultError::EncodingFailure)?;
 
+    // Preferred mode: decrypt with AAD binding to key alias.
     let plaintext = cipher
-        .decrypt(nonce, ciphertext.as_ref())
+        .decrypt(
+            nonce,
+            Payload {
+                msg: ciphertext.as_ref(),
+                aad: key_alias.as_bytes(),
+            },
+        )
+        // Migration fallback: older entries may not include AAD binding.
+        .or_else(|_| cipher.decrypt(nonce, ciphertext.as_ref()))
         .map_err(|_| VaultError::CryptoFailure)?;
 
     String::from_utf8(plaintext).map_err(|_| VaultError::EncodingFailure)
+}
+
+fn normalize_key_alias(raw: &str) -> Result<String, VaultError> {
+    let alias = raw.trim().to_lowercase();
+    if alias.len() < 3 {
+        return Err(VaultError::InvalidInput("key alias too short"));
+    }
+    Ok(alias)
 }
 
 fn hex_short(bytes: &[u8]) -> String {
@@ -166,5 +189,18 @@ mod tests {
     fn encrypt_sets_versioned_ciphertext_prefix() {
         let entry = encrypt_entry("openai_api_key", "secret-value").expect("encrypt");
         assert!(entry.encrypted.starts_with("mv1:"));
+    }
+
+    #[test]
+    fn key_alias_is_normalized_to_lowercase_trimmed() {
+        let entry = encrypt_entry("  OpenAI_API_Key  ", "secret-value").expect("encrypt");
+        assert_eq!(entry.key, "openai_api_key");
+    }
+
+    #[test]
+    fn decrypt_fails_when_key_alias_changes() {
+        let mut entry = encrypt_entry("openai_api_key", "secret-value").expect("encrypt");
+        entry.key = "different_key".to_string();
+        assert!(decrypt_entry(&entry).is_err());
     }
 }
