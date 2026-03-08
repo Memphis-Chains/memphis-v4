@@ -28,7 +28,7 @@ function cfg(db: string): AppConfig {
 }
 
 describe('vault routes e2e', () => {
-  it('returns 503 while rust vault bridge is disabled', async () => {
+  it('returns 400 on invalid payload and 503 while rust vault bridge is disabled', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'mv4-vault-e2e-'));
     const conf = cfg(join(dir, 'vault.db'));
     const c = createAppContainer(conf);
@@ -36,6 +36,18 @@ describe('vault routes e2e', () => {
       sessionRepository: c.sessionRepository,
       generationEventRepository: c.generationEventRepository,
     });
+
+    const invalidInit = await app.inject({
+      method: 'POST',
+      url: '/v1/vault/init',
+      payload: {
+        passphrase: '',
+        recovery_question: 'x',
+        recovery_answer: '',
+      },
+    });
+
+    expect(invalidInit.statusCode).toBe(400);
 
     const init = await app.inject({
       method: 'POST',

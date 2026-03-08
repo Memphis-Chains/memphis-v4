@@ -1,6 +1,8 @@
 import Fastify from 'fastify';
 import { randomUUID } from 'node:crypto';
+import { AppError } from '../../core/errors.js';
 import type { AppConfig } from '../config/schema.js';
+import { vaultDecryptSchema, vaultEncryptSchema, vaultInitSchema } from '../config/request-schemas.js';
 import { createLogger } from '../logging/logger.js';
 import { metrics } from '../logging/metrics.js';
 import { isAuthRequired } from './auth-policy.js';
@@ -137,8 +139,15 @@ export function createHttpServer(
 
 
   app.post<{ Body: VaultInitInput }>('/v1/vault/init', async (request, reply) => {
+    const parsed = vaultInitSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new AppError('VALIDATION_ERROR', 'Invalid vault init payload', 400, {
+        issues: parsed.error.issues.map((i) => ({ path: i.path.map(String), message: i.message })),
+      });
+    }
+
     try {
-      const out = vaultInit(request.body, process.env);
+      const out = vaultInit(parsed.data, process.env);
       return { ok: true, vault: out };
     } catch (error) {
       return reply.status(503).send({
@@ -149,8 +158,15 @@ export function createHttpServer(
   });
 
   app.post<{ Body: { key: string; plaintext: string } }>('/v1/vault/encrypt', async (request, reply) => {
+    const parsed = vaultEncryptSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new AppError('VALIDATION_ERROR', 'Invalid vault encrypt payload', 400, {
+        issues: parsed.error.issues.map((i) => ({ path: i.path.map(String), message: i.message })),
+      });
+    }
+
     try {
-      const { key, plaintext } = request.body;
+      const { key, plaintext } = parsed.data;
       const out = vaultEncrypt(key, plaintext, process.env);
       return { ok: true, entry: out };
     } catch (error) {
@@ -162,8 +178,15 @@ export function createHttpServer(
   });
 
   app.post<{ Body: { entry: VaultEntry } }>('/v1/vault/decrypt', async (request, reply) => {
+    const parsed = vaultDecryptSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new AppError('VALIDATION_ERROR', 'Invalid vault decrypt payload', 400, {
+        issues: parsed.error.issues.map((i) => ({ path: i.path.map(String), message: i.message })),
+      });
+    }
+
     try {
-      const out = vaultDecrypt(request.body.entry, process.env);
+      const out = vaultDecrypt(parsed.data.entry, process.env);
       return { ok: true, plaintext: out };
     } catch (error) {
       return reply.status(503).send({
