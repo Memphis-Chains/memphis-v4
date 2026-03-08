@@ -58,7 +58,10 @@ export function createHttpServer(
       routePath === '/v1/metrics' ||
       routePath === '/v1/ops/status' ||
       routePath === '/v1/sessions' ||
-      routePath.startsWith('/v1/sessions/')
+      routePath.startsWith('/v1/sessions/') ||
+      routePath === '/v1/vault/init' ||
+      routePath === '/v1/vault/encrypt' ||
+      routePath === '/v1/vault/decrypt'
     ) {
       sensitiveLimiter.check(key);
     }
