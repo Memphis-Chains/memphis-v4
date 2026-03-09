@@ -54,6 +54,7 @@ type CliArgs = {
   id?: string;
   query?: string;
   to?: string;
+  latest?: number;
   topK?: number;
   tuned?: boolean;
   strategy?: 'default' | 'latency-aware';
@@ -114,6 +115,7 @@ function parseArgs(argv: string[]): CliArgs {
     id: readFlag('--id'),
     query: readFlag('--query'),
     to: readFlag('--to'),
+    latest: readFlag('--latest') ? Number(readFlag('--latest')) : undefined,
     topK: readFlag('--top-k') ? Number(readFlag('--top-k')) : undefined,
     tuned: hasFlag('--tuned'),
     strategy: readFlag('--strategy') as CliArgs['strategy'],
@@ -206,6 +208,7 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
     id,
     query,
     to,
+    latest,
     topK,
     tuned,
     strategy,
@@ -401,8 +404,18 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
   if (command === 'decide' || command === 'infer') {
     if (command === 'decide' && subcommand === 'history') {
       const all = readDecisionHistory();
-      const entries = id ? all.filter((e) => e.decision.id === id) : all;
-      print({ ok: true, entries, count: entries.length, filter: id ? { id } : undefined }, json);
+      const filtered = id ? all.filter((e) => e.decision.id === id) : all;
+      const entries = latest && Number.isFinite(latest) && latest > 0 ? filtered.slice(-Math.trunc(latest)) : filtered;
+      print(
+        {
+          ok: true,
+          entries,
+          count: entries.length,
+          filter: id ? { id } : undefined,
+          latest: latest && Number.isFinite(latest) && latest > 0 ? Math.trunc(latest) : undefined,
+        },
+        json,
+      );
       return;
     }
 
