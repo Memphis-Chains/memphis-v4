@@ -503,9 +503,24 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
       );
 
       const runMs = durationMs && Number.isFinite(durationMs) && durationMs > 0 ? Math.trunc(durationMs) : 5000;
+      let stopRequested = false;
+      const stop = () => {
+        stopRequested = true;
+      };
+      process.once('SIGINT', stop);
+      process.once('SIGTERM', stop);
+
       print({ ok: true, mode: 'mcp-serve', host: transport.host, port: transport.port, durationMs: runMs }, json);
-      await new Promise((resolve) => setTimeout(resolve, runMs));
+
+      const startedAt = Date.now();
+      while (!stopRequested && Date.now() - startedAt < runMs) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
+      process.off('SIGINT', stop);
+      process.off('SIGTERM', stop);
       await transport.close();
+      print({ ok: true, mode: 'mcp-serve-stopped', reason: stopRequested ? 'signal' : 'timeout' }, json);
       return;
     }
 
