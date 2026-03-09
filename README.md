@@ -74,6 +74,7 @@ Use deterministic flow:
 - `docs/NAPI-CONTRACT-V1.md`
 - `docs/PHASE0-CLOSURE-CRITERIA.md`
 - `docs/VAULT-CLI.md`
+- `docs/CHAIN-IMPORT-JSON.md`
 - `docs/MUST-PASS-SMOKE.md`
 - `docs/V0.2.0-RC-CHECKLIST.md`
 - `docs/OPERATOR-5MIN-RUNBOOK.md`

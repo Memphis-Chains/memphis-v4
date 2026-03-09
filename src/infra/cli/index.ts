@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { loadConfig } from '../config/env.js';
+import { formatImportReport, runImportJsonPayload } from './import-json.js';
 import { createAppContainer } from '../../app/container.js';
 import { listVaultEntries, saveVaultEntry } from '../storage/vault-entry-store.js';
 import { vaultDecrypt, vaultEncrypt, vaultInit } from '../storage/rust-vault-adapter.js';
@@ -19,11 +20,6 @@ type CliArgs = {
   recoveryAnswer?: string;
 };
 
-type ChainBlock = {
-  index: number;
-  prev_hash: string;
-  hash: string;
-};
 
 function parseArgs(argv: string[]): CliArgs {
   const args = argv.slice(2);
@@ -92,42 +88,10 @@ function printChat(data: {
   console.log(data.output);
 }
 
-function parseChainFile(path: string): ChainBlock[] {
-  const raw = readFileSync(path, 'utf8');
-  const payload = JSON.parse(raw) as ChainBlock[] | { blocks: ChainBlock[] };
-  const blocks = Array.isArray(payload) ? payload : payload.blocks;
-  if (!Array.isArray(blocks)) {
-    throw new Error('import_json expects JSON array or {"blocks": [...]}');
-  }
-  return blocks;
-}
-
-function validateChainBlocks(blocks: ChainBlock[]): string[] {
-  const errors: string[] = [];
-  for (let i = 0; i < blocks.length; i += 1) {
-    const b = blocks[i];
-    if (b.index !== i) {
-      errors.push(`block[${i}] invalid index=${b.index}, expected=${i}`);
-    }
-
-    if (i === 0) {
-      if (b.prev_hash !== '0'.repeat(64)) {
-        errors.push('genesis prev_hash must be 64 zeros');
-      }
-    } else {
-      const prev = blocks[i - 1];
-      if (b.prev_hash !== prev.hash) {
-        errors.push(`block[${i}] prev_hash mismatch`);
-      }
-    }
-  }
-  return errors;
-}
-
-function runImportJson(file: string): { imported: number; valid: boolean; errors: string[] } {
-  const blocks = parseChainFile(file);
-  const errors = validateChainBlocks(blocks);
-  return { imported: blocks.length, valid: errors.length === 0, errors };
+function runImportJson(file: string) {
+  const raw = readFileSync(file, 'utf8');
+  const payload = JSON.parse(raw) as unknown;
+  return runImportJsonPayload(payload);
 }
 
 export async function runCli(argv: string[] = process.argv): Promise<void> {
@@ -160,7 +124,12 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
 
   if (command === 'chain' && subcommand === 'import_json') {
     if (!file) throw new Error('Missing required --file for chain import_json');
-    print(runImportJson(file), json);
+    const report = runImportJson(file);
+    if (json) {
+      print(report, true);
+      return;
+    }
+    console.log(formatImportReport(report));
     return;
   }
 
