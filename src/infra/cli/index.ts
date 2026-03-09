@@ -23,7 +23,7 @@ import {
 import { runInteractiveTui } from './interactive-tui.js';
 import { runTuiApp } from '../../tui/index.js';
 import { inferDecisionFromText } from '../../core/decision-gate.js';
-import { appendDecisionAudit } from '../../core/decision-audit-log.js';
+import { appendDecisionAudit, readDecisionAudit } from '../../core/decision-audit-log.js';
 import { appendDecisionHistory, readDecisionHistory } from '../../core/decision-history-store.js';
 import { transitionDecision, type DecisionStatus, type DecisionRecord } from '../../core/decision-lifecycle.js';
 import { invokeNativeMcpAsk, type NativeMcpRequest } from '../../bridges/mcp-native-gateway.js';
@@ -447,15 +447,23 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
         actor: 'cli',
         correlationId,
       });
+      const auditIndex = readDecisionAudit().length;
       const deterministicHash = createHash('sha256')
-        .update(JSON.stringify({ id: record.id, from: record.status, to, updatedAt: next.updatedAt, correlationId }))
+        .update(JSON.stringify({
+          eventId: audit.eventId,
+          id: record.id,
+          from: record.status,
+          to,
+          updatedAt: next.updatedAt,
+          correlationId,
+        }))
         .digest('hex');
 
       const historyPath = appendDecisionHistory(next, {
         correlationId,
         chainRef: {
-          chain: 'decision-history',
-          index: Date.now(),
+          chain: 'decision-audit',
+          index: auditIndex,
           hash: deterministicHash,
         },
       });
