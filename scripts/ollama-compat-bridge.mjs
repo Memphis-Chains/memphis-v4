@@ -1,9 +1,10 @@
 import http from 'node:http';
+import nodeProcess from 'node:process';
 
-const PORT = Number(process.env.OLLAMA_BRIDGE_PORT || 11435);
-const OLLAMA_BASE = process.env.OLLAMA_BASE || 'http://127.0.0.1:11434';
-const DEFAULT_MODEL = process.env.OLLAMA_MODEL || 'qwen3.5:2b';
-const API_KEY = process.env.OLLAMA_BRIDGE_API_KEY || 'local-ollama';
+const PORT = Number(nodeProcess.env.OLLAMA_BRIDGE_PORT || 11435);
+const OLLAMA_BASE = nodeProcess.env.OLLAMA_BASE || 'http://127.0.0.1:11434';
+const DEFAULT_MODEL = nodeProcess.env.OLLAMA_MODEL || 'qwen3.5:2b';
+const API_KEY = nodeProcess.env.OLLAMA_BRIDGE_API_KEY || 'local-ollama';
 
 function send(res, code, payload) {
   res.writeHead(code, { 'content-type': 'application/json' });
@@ -27,7 +28,7 @@ function authOk(req) {
 const server = http.createServer(async (req, res) => {
   try {
     if (req.url === '/health' && req.method === 'GET') {
-      const r = await fetch(`${OLLAMA_BASE}/api/tags`);
+      const r = await globalThis.fetch(`${OLLAMA_BASE}/api/tags`);
       if (!r.ok) return send(res, 503, { ok: false, error: `ollama_http_${r.status}` });
       return send(res, 200, { ok: true });
     }
@@ -38,7 +39,7 @@ const server = http.createServer(async (req, res) => {
       const body = raw ? JSON.parse(raw) : {};
       const model = body.model || DEFAULT_MODEL;
 
-      const ollamaRes = await fetch(`${OLLAMA_BASE}/api/generate`, {
+      const ollamaRes = await globalThis.fetch(`${OLLAMA_BASE}/api/generate`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -71,5 +72,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`ollama-compat-bridge listening on 127.0.0.1:${PORT}, model=${DEFAULT_MODEL}`);
+  globalThis.console.log(`ollama-compat-bridge listening on 127.0.0.1:${PORT}, model=${DEFAULT_MODEL}`);
 });
