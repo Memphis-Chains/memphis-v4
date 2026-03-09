@@ -128,10 +128,8 @@ async function streamOutputToHistory(
 ): Promise<void> {
   const lines = splitLines(text);
   for (const line of lines) {
-    let partial = '';
     for (let i = 0; i < line.length; i += 18) {
-      partial = line.slice(0, i + 18);
-      render(partial);
+      render(line.slice(0, i + 18));
       await delay(8);
     }
     pushHistory(history, line);
