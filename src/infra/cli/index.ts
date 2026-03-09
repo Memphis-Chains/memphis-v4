@@ -64,6 +64,7 @@ type CliArgs = {
   apply: boolean;
   dryRun: boolean;
   yes: boolean;
+  schema: boolean;
 };
 
 function parseArgs(argv: string[]): CliArgs {
@@ -125,6 +126,7 @@ function parseArgs(argv: string[]): CliArgs {
     apply: hasFlag('--apply'),
     dryRun: hasFlag('--dry-run'),
     yes: hasFlag('--yes'),
+    schema: hasFlag('--schema'),
   };
 }
 
@@ -218,6 +220,7 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
     apply,
     dryRun,
     yes,
+    schema,
   } = parseArgs(argv);
 
   if (!command || command === 'help' || command === '--help') {
@@ -225,7 +228,7 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
       {
         usage: 'memphis-v4 <command> [--json]',
         commands:
-          'health | providers:health | chat|ask|decide|infer|mcp --input "..." [--to proposed|accepted|implemented|verified|superseded|rejected] [--provider auto|shared-llm|decentralized-llm|local-fallback] [--model <id>] [--tui|--interactive] [--strategy default|latency-aware] | tui | doctor | onboarding wizard|bootstrap [--interactive] [--profile dev-local|prod-shared|prod-decentralized|ollama-local] [--write --out .env --force] [--dry-run|--apply --yes] | chain import_json --file <path> [--write --confirm-write --out <path>] | vault init|add|get|list | embed store|search [--tuned]|reset',
+          'health | providers:health | chat|ask|decide|infer|mcp --input "..." [--schema] [--to proposed|accepted|implemented|verified|superseded|rejected] [--provider auto|shared-llm|decentralized-llm|local-fallback] [--model <id>] [--tui|--interactive] [--strategy default|latency-aware] | tui | doctor | onboarding wizard|bootstrap [--interactive] [--profile dev-local|prod-shared|prod-decentralized|ollama-local] [--write --out .env --force] [--dry-run|--apply --yes] | chain import_json --file <path> [--write --confirm-write --out <path>] | vault init|add|get|list | embed store|search [--tuned]|reset',
       },
       json,
     );
@@ -459,6 +462,39 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
   const container = createAppContainer(config);
 
   if (command === 'mcp') {
+    if (schema) {
+      print(
+        {
+          ok: true,
+          schema: {
+            jsonrpc: '2.0',
+            methods: [
+              {
+                name: 'memphis.ask',
+                params: {
+                  input: 'string (required)',
+                  provider: 'auto|shared-llm|decentralized-llm|local-fallback (optional)',
+                  model: 'string (optional)',
+                },
+                result: {
+                  output: 'string',
+                  providerUsed: 'string',
+                  timingMs: 'number',
+                },
+              },
+            ],
+            errors: {
+              '-32700': 'parse_error: invalid JSON',
+              '-32601': 'method_not_allowed',
+              '-32602': 'invalid_params',
+            },
+          },
+        },
+        json,
+      );
+      return;
+    }
+
     if (!input || input.trim().length === 0) {
       throw new Error('mcp requires --input with JSON-RPC request payload');
     }

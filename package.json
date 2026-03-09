@@ -56,7 +56,8 @@
     "test:smoke:phase5-history-filter": "./scripts/smoke-phase5-history-filter.sh",
     "test:smoke:phase6-native-mcp-error-codes": "./scripts/smoke-phase6-native-mcp-error-codes.sh",
     "test:smoke:phase8-closure-checksum": "./scripts/validate-phase8-closure-checksum.sh",
-    "test:smoke:phase5-history-latest": "./scripts/smoke-phase5-history-latest.sh"
+    "test:smoke:phase5-history-latest": "./scripts/smoke-phase5-history-latest.sh",
+    "test:smoke:phase6-native-mcp-schema": "./scripts/smoke-phase6-native-mcp-schema.sh"
   },
   "keywords": [],
   "author": "",
