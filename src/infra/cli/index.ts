@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { createConnection } from 'node:net';
+import { createHash } from 'node:crypto';
 import { execSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { loadConfig } from '../config/env.js';
@@ -441,11 +442,15 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
         to,
         actor: 'cli',
       });
+      const deterministicHash = createHash('sha256')
+        .update(JSON.stringify({ id: record.id, from: record.status, to, updatedAt: next.updatedAt }))
+        .digest('hex');
+
       const historyPath = appendDecisionHistory(next, {
         chainRef: {
           chain: 'decision-history',
           index: Date.now(),
-          hash: `sim-${record.id}-${to}`,
+          hash: deterministicHash,
         },
       });
       print({ ok: true, mode: 'decide-transition', from: record.status, to, decision: next, audit, historyPath }, json);
