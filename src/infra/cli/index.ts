@@ -19,6 +19,7 @@ import {
   getRustEmbedAdapterStatus,
 } from '../storage/rust-embed-adapter.js';
 import { runInteractiveTui } from './interactive-tui.js';
+import { runTuiApp } from '../../tui/index.js';
 import { checklistFromEnv, runWizardInteractive, writeProfileEnv, type WizardProfile } from './onboarding-wizard.js';
 
 type CliArgs = {
@@ -197,7 +198,7 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
       {
         usage: 'memphis-v4 <command> [--json]',
         commands:
-          'health | providers:health | chat|ask --input "..." [--provider auto|shared-llm|decentralized-llm|local-fallback] [--model <id>] [--tui|--interactive] [--strategy default|latency-aware] | doctor | onboarding wizard [--interactive] [--profile dev-local|prod-shared|prod-decentralized|ollama-local] [--write --out .env --force] | chain import_json --file <path> [--write --confirm-write --out <path>] | vault init|add|get|list | embed store|search [--tuned]|reset',
+          'health | providers:health | chat|ask --input "..." [--provider auto|shared-llm|decentralized-llm|local-fallback] [--model <id>] [--tui|--interactive] [--strategy default|latency-aware] | tui | doctor | onboarding wizard [--interactive] [--profile dev-local|prod-shared|prod-decentralized|ollama-local] [--write --out .env --force] | chain import_json --file <path> [--write --confirm-write --out <path>] | vault init|add|get|list | embed store|search [--tuned]|reset',
       },
       json,
     );
@@ -379,6 +380,16 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
       providers,
     };
     print(payload, json);
+    return;
+  }
+
+  if (command === 'tui') {
+    await runTuiApp({
+      orchestration: container.orchestration,
+      provider: provider ?? 'auto',
+      model,
+      strategy,
+    });
     return;
   }
 
