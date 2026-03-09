@@ -1,11 +1,12 @@
 import readline from 'node:readline/promises';
+import { emitKeypressEvents } from 'node:readline';
 import { stdin as input, stdout as output } from 'node:process';
 import type { OrchestrationService } from '../modules/orchestration/service.js';
 import type { ProviderName } from '../core/types.js';
-import { runChatOnce } from './screens/chat-screen.js';
 import { renderHealthScreen } from './screens/health-screen.js';
 import { embedSearchScreen, embedStoreScreen } from './screens/embed-screen.js';
 import { runEmbedReset, runVaultAdd, runVaultGet, runVaultInit, runVaultList } from './adapters/command-parity.js';
+import { keybindToScreen, normalizeScreen, type TuiScreen } from './core.js';
 
 export type TuiOptions = {
   orchestration: OrchestrationService;
@@ -18,15 +19,17 @@ type TuiState = {
   provider: 'auto' | ProviderName;
   strategy: 'default' | 'latency-aware';
   model?: string;
+  screen: TuiScreen;
 };
 
-const MAX_HISTORY_LINES = 200;
+const MAX_HISTORY_LINES = 260;
 
 function commandHelpLines(): string[] {
   return [
     '/help',
     '/exit',
     '/health',
+    '/screen <chat|health|embed|vault>',
     '/provider <auto|shared-llm|decentralized-llm|local-fallback>',
     '/strategy <default|latency-aware>',
     '/model <id>',
@@ -38,6 +41,7 @@ function commandHelpLines(): string[] {
     '/embed store <id> <value>',
     '/embed search <query> [topK] [tuned=true|false]',
     'anything else => chat prompt',
+    'keybinds: Ctrl+L clear-screen, Ctrl+K clear-history, Ctrl+1..4 switch screen',
   ];
 }
 
@@ -56,12 +60,10 @@ function wrapLine(value: string, width: number): string[] {
 
   const out: string[] = [];
   let rest = value;
-
   while (rest.length > width) {
     out.push(rest.slice(0, width));
     rest = rest.slice(width);
   }
-
   if (rest.length > 0) out.push(rest);
   return out;
 }
@@ -77,29 +79,33 @@ function pushHistory(history: string[], text: string): void {
 
 function formatStatusLine(state: TuiState, width: number): string {
   const model = state.model?.trim().length ? state.model : 'default';
-  return clip(`provider=${state.provider} | strategy=${state.strategy} | model=${model}`, width);
+  return clip(`screen=${state.screen} | provider=${state.provider} | strategy=${state.strategy} | model=${model}`, width);
 }
 
-function drawFullScreen(state: TuiState, history: string[]): void {
+function rightPanelLines(screen: TuiScreen): string[] {
+  const base = ['Commands:'];
+  if (screen === 'chat') return [...base, ...commandHelpLines()];
+  if (screen === 'health') return [...base, '/health', '/screen chat', 'hint: chat still works from input'];
+  if (screen === 'embed') return [...base, '/embed reset', '/embed store <id> <value>', '/embed search <query> [topK] [tuned=true|false]'];
+  return [...base, '/vault init <passphrase> <question> <answer>', '/vault add <key> <value>', '/vault get <key>', '/vault list [key]'];
+}
+
+function drawFullScreen(state: TuiState, history: string[], liveLine?: string): void {
   const termWidth = Math.max(80, output.columns || 80);
   const termHeight = Math.max(24, output.rows || 24);
 
   const leftWidth = Math.max(24, Math.floor(termWidth * 0.68));
   const rightWidth = termWidth - leftWidth - 3;
-
   const availableBodyRows = termHeight - 5;
-  const title = 'Memphis TUI · full-screen baseline (pane mode)';
 
   output.write('\x1b[2J\x1b[H');
-  console.log(clip(title, termWidth));
+  console.log(clip('Memphis TUI · full-screen baseline (pane mode)', termWidth));
   console.log(clip(formatStatusLine(state, termWidth), termWidth));
   console.log('-'.repeat(termWidth));
 
-  const historyLines = wrapLines(history, leftWidth);
+  const historyLines = wrapLines(liveLine ? [...history, liveLine] : history, leftWidth);
   const visibleHistory = historyLines.slice(-availableBodyRows);
-
-  const helpBase = ['Commands:'];
-  const helpLines = wrapLines([...helpBase, ...commandHelpLines()], rightWidth);
+  const helpLines = wrapLines(rightPanelLines(state.screen), rightWidth);
 
   for (let row = 0; row < availableBodyRows; row += 1) {
     const left = clip(visibleHistory[row] ?? '', leftWidth).padEnd(leftWidth, ' ');
@@ -110,20 +116,80 @@ function drawFullScreen(state: TuiState, history: string[]): void {
   console.log('-'.repeat(termWidth));
 }
 
+async function delay(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function streamOutputToHistory(
+  history: string[],
+  text: string,
+  state: TuiState,
+  render: (line?: string) => void,
+): Promise<void> {
+  const lines = splitLines(text);
+  for (const line of lines) {
+    let partial = '';
+    for (let i = 0; i < line.length; i += 18) {
+      partial = line.slice(0, i + 18);
+      render(partial);
+      await delay(8);
+    }
+    pushHistory(history, line);
+    render();
+  }
+  if (lines.length === 0) {
+    void state;
+    render();
+  }
+}
+
 export async function runTuiApp(options: TuiOptions): Promise<void> {
   const rl = readline.createInterface({ input, output, terminal: true });
   const state: TuiState = {
     provider: options.provider ?? 'auto',
     strategy: options.strategy ?? 'default',
     model: options.model,
+    screen: 'chat',
   };
   const history: string[] = [];
 
+  const render = (line?: string) => drawFullScreen(state, history, line);
+
+  if (input.isTTY) {
+    emitKeypressEvents(input);
+    input.setRawMode?.(true);
+  }
+
+  const onKeypress = (_str: string, key: { ctrl?: boolean; name?: string }) => {
+    if (!key.ctrl) return;
+
+    if (key.name === 'l') {
+      pushHistory(history, '[keybind] screen redraw (Ctrl+L)');
+      render();
+      return;
+    }
+
+    if (key.name === 'k') {
+      history.length = 0;
+      pushHistory(history, '[keybind] history cleared (Ctrl+K)');
+      render();
+      return;
+    }
+
+    const next = keybindToScreen(key.name);
+    if (next) {
+      state.screen = next;
+      pushHistory(history, `[keybind] active screen=${next} (Ctrl+${key.name})`);
+      render();
+    }
+  };
+
+  input.on('keypress', onKeypress);
   pushHistory(history, 'Started full-screen TUI baseline. Type /help for command hints.');
 
   try {
     while (true) {
-      drawFullScreen(state, history);
+      render();
       const line = (await rl.question('memphis:tui> ')).trim();
       if (!line) continue;
       if (line === '/exit' || line === '/quit') break;
@@ -136,6 +202,17 @@ export async function runTuiApp(options: TuiOptions): Promise<void> {
 
       if (line === '/health') {
         pushHistory(history, await renderHealthScreen(options.orchestration));
+        continue;
+      }
+
+      if (line.startsWith('/screen ')) {
+        const next = normalizeScreen(line.slice('/screen '.length).trim());
+        if (next) {
+          state.screen = next;
+          pushHistory(history, `ok: screen=${next}`);
+        } else {
+          pushHistory(history, 'error: usage /screen <chat|health|embed|vault>');
+        }
         continue;
       }
 
@@ -192,9 +269,41 @@ export async function runTuiApp(options: TuiOptions): Promise<void> {
       }
 
       pushHistory(history, `> ${line}`);
-      pushHistory(history, await runChatOnce(options.orchestration, line, state));
+      const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦'];
+      let frame = 0;
+      const spinner = setInterval(() => {
+        render(`${spinnerFrames[frame % spinnerFrames.length]} generating response...`);
+        frame += 1;
+      }, 90);
+
+      try {
+        const result = await options.orchestration.generate({
+          input: line,
+          provider: state.provider,
+          model: state.model,
+          strategy: state.strategy,
+        });
+
+        clearInterval(spinner);
+        const chunks = [`[provider=${result.providerUsed} model=${result.modelUsed ?? 'n/a'} timing=${result.timingMs}ms]`, result.output];
+        if (result.trace) {
+          chunks.push('trace:');
+          for (const a of result.trace.attempts) {
+            chunks.push(
+              `  - #${a.attempt} ${a.provider} ${a.viaFallback ? '(fallback)' : '(primary)'} ${a.latencyMs}ms ${a.ok ? 'ok' : `err=${a.errorCode ?? 'unknown'}`}`,
+            );
+          }
+        }
+
+        await streamOutputToHistory(history, chunks.join('\n'), state, render);
+      } catch (error) {
+        clearInterval(spinner);
+        pushHistory(history, `error: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
   } finally {
+    input.off('keypress', onKeypress);
+    if (input.isTTY) input.setRawMode?.(false);
     output.write('\x1b[2J\x1b[H');
     rl.close();
   }
