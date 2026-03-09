@@ -437,6 +437,7 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
       }
       const record = JSON.parse(input) as DecisionRecord;
       const next = transitionDecision(record, to as DecisionStatus);
+      const correlationId = `${record.id}:${Date.now()}`;
       const audit = appendDecisionAudit({
         ts: new Date().toISOString(),
         decisionId: record.id,
@@ -444,12 +445,14 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
         from: record.status,
         to,
         actor: 'cli',
+        correlationId,
       });
       const deterministicHash = createHash('sha256')
-        .update(JSON.stringify({ id: record.id, from: record.status, to, updatedAt: next.updatedAt }))
+        .update(JSON.stringify({ id: record.id, from: record.status, to, updatedAt: next.updatedAt, correlationId }))
         .digest('hex');
 
       const historyPath = appendDecisionHistory(next, {
+        correlationId,
         chainRef: {
           chain: 'decision-history',
           index: Date.now(),
