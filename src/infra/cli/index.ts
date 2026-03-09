@@ -400,7 +400,9 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
 
   if (command === 'decide' || command === 'infer') {
     if (command === 'decide' && subcommand === 'history') {
-      print({ ok: true, entries: readDecisionHistory(), count: readDecisionHistory().length }, json);
+      const all = readDecisionHistory();
+      const entries = id ? all.filter((e) => e.decision.id === id) : all;
+      print({ ok: true, entries, count: entries.length, filter: id ? { id } : undefined }, json);
       return;
     }
 
