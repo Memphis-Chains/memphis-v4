@@ -113,6 +113,23 @@ struct OpenAiCompatibleProvider {
     timeout: Duration,
 }
 
+#[derive(Debug, Clone)]
+struct OllamaProvider {
+    name: String,
+    url: String,
+    model: String,
+    timeout: Duration,
+}
+
+#[derive(Debug, Clone)]
+struct CohereProvider {
+    name: String,
+    url: String,
+    api_key: String,
+    model: String,
+    timeout: Duration,
+}
+
 #[derive(Serialize)]
 struct OpenAiEmbReq<'a> {
     model: &'a str,
@@ -127,6 +144,35 @@ struct OpenAiEmbResp {
 #[derive(Deserialize)]
 struct OpenAiEmbData {
     embedding: Vec<f32>,
+}
+
+#[derive(Serialize)]
+struct OllamaEmbReq<'a> {
+    model: &'a str,
+    prompt: &'a str,
+}
+
+#[derive(Deserialize)]
+struct OllamaEmbResp {
+    embedding: Vec<f32>,
+}
+
+#[derive(Serialize)]
+struct CohereEmbReq<'a> {
+    model: &'a str,
+    input_type: &'a str,
+    embedding_types: Vec<&'a str>,
+    texts: Vec<&'a str>,
+}
+
+#[derive(Deserialize)]
+struct CohereEmbResp {
+    embeddings: CohereEmbeddings,
+}
+
+#[derive(Deserialize)]
+struct CohereEmbeddings {
+    float: Vec<Vec<f32>>,
 }
 
 impl EmbeddingProvider for OpenAiCompatibleProvider {
@@ -170,6 +216,90 @@ impl EmbeddingProvider for OpenAiCompatibleProvider {
         }
 
         Ok(normalize_to_dim(first.embedding, dim))
+    }
+}
+
+impl EmbeddingProvider for OllamaProvider {
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    fn embed(&self, text: &str, dim: usize) -> Result<Vec<f32>, EmbedError> {
+        let client = reqwest::blocking::Client::builder()
+            .timeout(self.timeout)
+            .build()
+            .map_err(|e| EmbedError::ProviderRequest(e.to_string()))?;
+
+        let resp = client
+            .post(self.url.as_str())
+            .header("content-type", "application/json")
+            .json(&OllamaEmbReq {
+                model: self.model.as_str(),
+                prompt: text,
+            })
+            .send()
+            .map_err(|e| EmbedError::ProviderRequest(e.to_string()))?;
+
+        if !resp.status().is_success() {
+            return Err(EmbedError::ProviderRequest(format!("http_{}", resp.status().as_u16())));
+        }
+
+        let parsed: OllamaEmbResp = resp
+            .json()
+            .map_err(|e| EmbedError::ProviderResponse(e.to_string()))?;
+
+        if parsed.embedding.is_empty() {
+            return Err(EmbedError::ProviderResponse("empty embedding vector".to_string()));
+        }
+
+        Ok(normalize_to_dim(parsed.embedding, dim))
+    }
+}
+
+impl EmbeddingProvider for CohereProvider {
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    fn embed(&self, text: &str, dim: usize) -> Result<Vec<f32>, EmbedError> {
+        let client = reqwest::blocking::Client::builder()
+            .timeout(self.timeout)
+            .build()
+            .map_err(|e| EmbedError::ProviderRequest(e.to_string()))?;
+
+        let resp = client
+            .post(self.url.as_str())
+            .bearer_auth(self.api_key.as_str())
+            .header("content-type", "application/json")
+            .json(&CohereEmbReq {
+                model: self.model.as_str(),
+                input_type: "search_document",
+                embedding_types: vec!["float"],
+                texts: vec![text],
+            })
+            .send()
+            .map_err(|e| EmbedError::ProviderRequest(e.to_string()))?;
+
+        if !resp.status().is_success() {
+            return Err(EmbedError::ProviderRequest(format!("http_{}", resp.status().as_u16())));
+        }
+
+        let parsed: CohereEmbResp = resp
+            .json()
+            .map_err(|e| EmbedError::ProviderResponse(e.to_string()))?;
+
+        let first = parsed
+            .embeddings
+            .float
+            .into_iter()
+            .next()
+            .ok_or_else(|| EmbedError::ProviderResponse("missing embeddings.float[0]".to_string()))?;
+
+        if first.is_empty() {
+            return Err(EmbedError::ProviderResponse("empty embedding vector".to_string()));
+        }
+
+        Ok(normalize_to_dim(first, dim))
     }
 }
 
@@ -349,6 +479,58 @@ impl EmbedPipeline {
                     primary: remote,
                     fallback: local,
                     name: "openai-compatible->local-fallback".to_string(),
+                })
+            }
+            EmbedMode::Provider(name) if name == "ollama" => {
+                let local = LocalDeterministicProvider;
+                let remote = OllamaProvider {
+                    name: "ollama".to_string(),
+                    url: config
+                        .provider_url
+                        .clone()
+                        .unwrap_or_else(|| "http://127.0.0.1:11434/api/embeddings".to_string()),
+                    model: config
+                        .provider_model
+                        .clone()
+                        .unwrap_or_else(|| "nomic-embed-text".to_string()),
+                    timeout: Duration::from_millis(config.provider_timeout_ms.max(500)),
+                };
+
+                Box::new(FallbackProvider {
+                    primary: remote,
+                    fallback: local,
+                    name: "ollama->local-fallback".to_string(),
+                })
+            }
+            EmbedMode::Provider(name) if name == "cohere" => {
+                let local = LocalDeterministicProvider;
+                let Some(api_key) = config.provider_api_key.clone() else {
+                    return Ok(Self {
+                        config,
+                        provider: Box::new(local),
+                        docs: HashMap::new(),
+                        persistence: None,
+                    });
+                };
+
+                let remote = CohereProvider {
+                    name: "cohere".to_string(),
+                    url: config
+                        .provider_url
+                        .clone()
+                        .unwrap_or_else(|| "https://api.cohere.com/v2/embed".to_string()),
+                    api_key,
+                    model: config
+                        .provider_model
+                        .clone()
+                        .unwrap_or_else(|| "embed-english-v3.0".to_string()),
+                    timeout: Duration::from_millis(config.provider_timeout_ms.max(500)),
+                };
+
+                Box::new(FallbackProvider {
+                    primary: remote,
+                    fallback: local,
+                    name: "cohere->local-fallback".to_string(),
                 })
             }
             EmbedMode::Provider(name) => return Err(EmbedError::ProviderUnavailable(name.clone())),
@@ -686,6 +868,30 @@ mod tests {
         .expect("pipeline");
 
         assert_eq!(pipeline.provider_name(), "local-deterministic");
+    }
+
+    #[test]
+    fn cohere_mode_without_key_falls_back_safely() {
+        let pipeline = EmbedPipeline::new(EmbedConfig {
+            mode: EmbedMode::Provider("cohere".to_string()),
+            provider_api_key: None,
+            ..EmbedConfig::default()
+        })
+        .expect("pipeline");
+
+        assert_eq!(pipeline.provider_name(), "local-deterministic");
+    }
+
+    #[test]
+    fn ollama_mode_is_supported() {
+        let pipeline = EmbedPipeline::new(EmbedConfig {
+            mode: EmbedMode::Provider("ollama".to_string()),
+            provider_url: Some("http://127.0.0.1:9/api/embeddings".to_string()),
+            ..EmbedConfig::default()
+        })
+        .expect("pipeline");
+
+        assert_eq!(pipeline.provider_name(), "ollama->local-fallback");
     }
 
     #[test]

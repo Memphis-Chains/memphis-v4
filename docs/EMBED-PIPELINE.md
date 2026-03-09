@@ -11,10 +11,12 @@
 Current production mode:
 - `EmbedMode::LocalDeterministic` ✅
 
-External mode (new):
-- `EmbedMode::Provider("openai-compatible")` calls a real HTTP embeddings endpoint
+External modes (new):
+- `EmbedMode::Provider("openai-compatible")` via OpenAI-compatible JSON schema
+- `EmbedMode::Provider("ollama")` via `/api/embeddings` (`model`, `prompt`)
+- `EmbedMode::Provider("cohere")` via `/v2/embed` (`embeddings.float[]`)
 - env-driven settings: `RUST_EMBED_PROVIDER_URL`, `RUST_EMBED_PROVIDER_API_KEY`, `RUST_EMBED_PROVIDER_MODEL`, `RUST_EMBED_PROVIDER_TIMEOUT_MS`
-- **safe fallback**: if provider key is missing at startup or remote call fails at runtime, pipeline falls back to `local-deterministic`
+- **safe fallback**: if required key is missing at startup or remote call fails at runtime, pipeline falls back to `local-deterministic`
 
 Deferred mode:
 - unknown provider names still return explicit `ProviderUnavailable`
