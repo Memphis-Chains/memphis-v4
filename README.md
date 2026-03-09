@@ -10,6 +10,9 @@ Status:
 - Operating mode: quality-first, no rushed shortcuts
 - Baseline freeze active after `v0.2.0-rc.2`: additive hardening by default (incident/approved-roadmap exceptions)
 
+Primary reference (main):
+- `MEMPHIS-V4-CODELINE-BLUEPRINT.md` — canonical architecture/build blueprint
+
 Badges:
 - CI quality-gate: ![ci](https://github.com/Memphis-Chains/memphis-v4/actions/workflows/ci.yml/badge.svg)
 - Nightly ollama runtime smoke: ![ollama-runtime-smoke](https://github.com/Memphis-Chains/memphis-v4/actions/workflows/ollama-runtime-smoke.yml/badge.svg)
