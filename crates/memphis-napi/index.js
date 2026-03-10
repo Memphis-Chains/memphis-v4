@@ -1,5 +1,10 @@
-const { createRequire } = require('module');
-const path = require('path');
+import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const require = createRequire(__filename);
 
 function getBinaryName() {
   const { platform, arch } = process;
@@ -9,10 +14,27 @@ function getBinaryName() {
   return `${platformMap[platform]}-${archMap[arch]}${suffix}`;
 }
 
+const binaryPath = join(__dirname, getBinaryName());
+let nativeModule;
+
 try {
-  const binaryPath = path.join(__dirname, getBinaryName());
-  const req = createRequire(__filename);
-  module.exports = req(binaryPath);
+  nativeModule = require(binaryPath);
 } catch (e) {
   throw new Error(`Failed to load native binary: ${e.message}. Platform: ${process.platform}-${process.arch}`);
 }
+
+export default nativeModule;
+export const chainQuery = nativeModule.chainQuery;
+export const chainAppend = nativeModule.chainAppend;
+export const embedReset = nativeModule.embedReset;
+export const embedStore = nativeModule.embedStore;
+export const embedSearch = nativeModule.embedSearch;
+export const chainValidate = nativeModule.chainValidate;
+export const vaultDecrypt = nativeModule.vaultDecrypt;
+export const vaultEncrypt = nativeModule.vaultEncrypt;
+export const vaultInitJson = nativeModule.vaultInitJson;
+export const embedSearchTuned = nativeModule.embedSearchTuned;
+export const vaultInit = nativeModule.vaultInit;
+export const vaultStore = nativeModule.vaultStore;
+export const vaultRetrieve = nativeModule.vaultRetrieve;
+export const vaultInitFull = nativeModule.vaultInitFull;
