@@ -14,3 +14,4 @@ zeroize = "1"
 
 [dev-dependencies]
 serde_json.workspace = true
+chrono.workspace = true

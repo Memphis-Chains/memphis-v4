@@ -80,7 +80,7 @@ pub fn vault_init(passphrase: String) -> Result<JsVault, napi::Error> {
 }
 
 #[napi]
-pub fn vault_store(vault: &JsVault, key: String, plaintext: Buffer) -> Result<JsVaultEntry, napi::Error> {
+pub fn vault_store(vault: JsVault, key: String, plaintext: Buffer) -> Result<JsVaultEntry, napi::Error> {
     let inner = vault.to_inner()?;
     let entry = inner
         .store(&key, &plaintext)
@@ -89,7 +89,7 @@ pub fn vault_store(vault: &JsVault, key: String, plaintext: Buffer) -> Result<Js
 }
 
 #[napi]
-pub fn vault_retrieve(vault: &JsVault, entry: &JsVaultEntry) -> Result<Buffer, napi::Error> {
+pub fn vault_retrieve(vault: JsVault, entry: JsVaultEntry) -> Result<Buffer, napi::Error> {
     let inner = vault.to_inner()?;
     let plaintext = inner
         .retrieve(&entry.to_inner()?)
