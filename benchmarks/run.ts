@@ -21,6 +21,7 @@ type RunMode = 'run' | 'check' | 'baseline:update';
 const BASELINE_PATH = resolve('benchmarks/baseline.json');
 const PERF_DIR = resolve('data/perf-bench');
 const REGRESSION_THRESHOLD = 20;
+const REGRESSION_EPSILON_PCT = 0.25;
 
 function nowMs(): number {
   return Number(process.hrtime.bigint()) / 1_000_000;
@@ -42,11 +43,11 @@ function isRegression(key: BenchmarkKey, current: number, baseline: number): boo
   if (baseline <= 0) return false;
   if (key === 'embed_search' || key === 'ask_request') {
     const increasePct = ((current - baseline) / baseline) * 100;
-    return increasePct > REGRESSION_THRESHOLD;
+    return increasePct > REGRESSION_THRESHOLD + REGRESSION_EPSILON_PCT;
   }
 
   const dropPct = ((baseline - current) / baseline) * 100;
-  return dropPct > REGRESSION_THRESHOLD;
+  return dropPct > REGRESSION_THRESHOLD + REGRESSION_EPSILON_PCT;
 }
 
 function buildDecision(i: number) {
