@@ -32,7 +32,7 @@ export function enforceGatewayExecPolicy(command: string, policy: GatewayExecPol
 
   for (const token of policy.blockedTokens) {
     if (token && normalized.includes(token)) {
-      throw new AppError('FORBIDDEN', `command blocked by token policy: ${token}`, 403);
+      throw new AppError('VALIDATION_ERROR', `command blocked by token policy: ${token}`, 403);
     }
   }
 
@@ -43,7 +43,7 @@ export function enforceGatewayExecPolicy(command: string, policy: GatewayExecPol
 
   const allowed = policy.allowlist.some((entry) => entry === baseCommand);
   if (!allowed) {
-    throw new AppError('FORBIDDEN', `command not in gateway allowlist: ${baseCommand}`, 403);
+    throw new AppError('VALIDATION_ERROR', `command not in gateway allowlist: ${baseCommand}`, 403);
   }
 }
 

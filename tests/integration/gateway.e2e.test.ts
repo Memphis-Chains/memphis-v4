@@ -56,7 +56,7 @@ describe('Gateway e2e', () => {
 
     expect(res.status).toBe(403);
     const body = (await res.json()) as { error?: { code?: string; requestId?: string } };
-    expect(body.error?.code).toBe('FORBIDDEN');
+    expect(body.error?.code).toBe('VALIDATION_ERROR');
     expect(body.error?.requestId).toBe('gw-2');
   });
 });
