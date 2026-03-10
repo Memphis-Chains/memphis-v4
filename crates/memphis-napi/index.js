@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
+/* eslint-disable no-undef */
+/* eslint-disable preserve-caught-error */
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -20,7 +23,7 @@ let nativeModule;
 try {
   nativeModule = require(binaryPath);
 } catch (e) {
-  throw new Error(`Failed to load native binary: ${e.message}. Platform: ${process.platform}-${process.arch}`);
+  throw new Error(`Failed to load native binary: ${e.message}. Platform: ${process.platform}-${process.arch}`, { cause: e });
 }
 
 export default nativeModule;
