@@ -256,7 +256,8 @@ export function createHttpServer(
   app.post<{ Body: { content: string; tags?: string[]; chain?: string } }>(
     '/api/journal',
     async (request, reply) => {
-      const { content, tags = [], chain = 'journal' } = request.body || {};
+      const { content, tags = [] } = request.body || {};
+      const chain = request.body?.chain ?? 'journal';
       if (!content || typeof content !== 'string') {
         return reply.status(400).send({ ok: false, error: 'content required' });
       }
@@ -276,7 +277,7 @@ export function createHttpServer(
   app.post<{ Body: { query: string; chain?: string; limit?: number } }>(
     '/api/recall',
     async (request, reply) => {
-      const { query, chain, limit = 10 } = request.body || {};
+      const { query, limit = 10 } = request.body || {};
       if (!query || typeof query !== 'string') {
         return reply.status(400).send({ ok: false, error: 'query required' });
       }
