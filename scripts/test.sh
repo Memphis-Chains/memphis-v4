@@ -6,6 +6,7 @@ cd "$ROOT_DIR"
 
 npm run test:rust
 npm run test:ts
+npm run test:fuzz
 npm run test:smoke
 
 echo "TEST_STACK_OK"
