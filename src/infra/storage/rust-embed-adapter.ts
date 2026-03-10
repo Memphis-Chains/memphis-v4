@@ -65,7 +65,7 @@ function buildCacheKey(query: string): string {
   return createHash('sha256').update(query).digest('hex');
 }
 
-function getCachedResult(query: string, rawEnv: NodeJS.ProcessEnv): EmbedSearchResult | null {
+function getCachedResult(query: string, _rawEnv: NodeJS.ProcessEnv): EmbedSearchResult | null {
   const key = buildCacheKey(query);
   const cached = embedSearchCache.get(key);
   if (!cached) return null;
