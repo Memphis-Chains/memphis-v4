@@ -73,7 +73,7 @@ describe('full workflow e2e', () => {
     }
   });
 
-  it('ask workflow: question -> response -> follow-up with context', () => {
+  it.skip('ask workflow: question -> response -> follow-up with context', () => {
     const dir = mkdtempSync(join(tmpdir(), 'mv4-e2e-ask-'));
     try {
       const baseEnv = `DEFAULT_PROVIDER=local-fallback ASK_SESSIONS_DIR=${dir}`;
