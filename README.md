@@ -1,3 +1,7 @@
+> ⚠️ **This repo is ARCHIVED.**
+>
+> For the latest version, see [Memphis-Chains/memphis](https://github.com/Memphis-Chains/memphis)
+
 # Memphis v4
 
 Memphis v4 is a local-first assistant runtime for building and operating AI task workflows.
